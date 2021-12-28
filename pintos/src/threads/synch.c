@@ -114,9 +114,16 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters)) 
+  {
+    /*为了每次V操作唤醒队首的线程就是优先级最高的，先对等待列表里面的线程按优先级排序*/
+    list_sort (&sema->waiters, cmp_by_priority, NULL);
+
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
+  }
   sema->value++;
+  /*可能需要抢占*/
+  thread_yield ();
   intr_set_level (old_level);
 }
 
@@ -178,6 +185,7 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
+  lock->priority = PRI_MIN;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -196,8 +204,31 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  /*迭代捐赠*/
+  if (lock->holder != NULL)
+  {
+    thread_current ()->lock_waiting = lock;
+    struct lock *iterator_lock = lock;
+    while (iterator_lock != NULL &&
+           thread_current ()->priority > iterator_lock->priority)
+    {
+      iterator_lock->priority = thread_current ()->priority;
+      thread_check_priority (iterator_lock->holder);
+      iterator_lock = iterator_lock->holder->lock_waiting;
+    }
+  }
+
   sema_down (&lock->semaphore);
+
+  /*P操作返回后，获得成功*/
+  thread_current ()->lock_waiting = NULL;
+  list_insert_ordered (&thread_current ()->locks_holding, &lock->elem, lock_cmp_by_priority, NULL);
+
+
   lock->holder = thread_current ();
+
+  /*成功获取锁后要检查优先级，因为有可能锁的优先级高于线程原来的优先级。*/
+  thread_check_priority (thread_current ());
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -230,6 +261,13 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+
+  /*从locks_holding中将其移除*/
+  list_remove (&lock->elem);
+  /*释放后线程更新优先度*/
+  thread_check_priority (thread_current ());
+  /*重置锁的优先度*/
+  lock->priority = PRI_MIN;
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
@@ -335,4 +373,12 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+/*依据优先度比较lock*/
+bool
+lock_cmp_by_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+  return list_entry (a, struct lock, elem)->priority >
+         list_entry (b, struct lock, elem)->priority;
 }

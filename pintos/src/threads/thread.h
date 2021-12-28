@@ -103,6 +103,11 @@ struct thread
 
     /*剩余阻塞时间*/
     int64_t ticks_blocked;
+
+   /*锁相关*/
+    int old_priority; 
+    struct list locks_holding;          /* 拥有锁的列表。 */
+    struct lock *lock_waiting;          /* 需要等待获取的锁。 */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -123,6 +128,9 @@ void thread_block (void);
 void thread_unblock (struct thread *);
 
 bool cmp_by_priority (const struct list_elem *, const struct list_elem *, void *aux );
+
+void
+thread_check_priority (struct thread *);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);

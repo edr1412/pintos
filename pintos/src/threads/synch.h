@@ -22,6 +22,8 @@ struct lock
   {
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
+    int priority;               /* 锁的优先级。在锁没有被获取时候为 PRI_MIN，被获取后等待获取锁的所有线程优先级的最大值。 */
+    struct list_elem elem;              /* List element.不知道直接加行不行。 */
   };
 
 void lock_init (struct lock *);
@@ -29,6 +31,7 @@ void lock_acquire (struct lock *);
 bool lock_try_acquire (struct lock *);
 void lock_release (struct lock *);
 bool lock_held_by_current_thread (const struct lock *);
+bool lock_cmp_by_priority (const struct list_elem *, const struct list_elem *, void *aux);
 
 /* Condition variable. */
 struct condition 

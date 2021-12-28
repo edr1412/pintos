@@ -359,10 +359,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  thread_current ()->old_priority = new_priority;
+  /*再根据锁更新一下优先度，搞不好根本不用变*/
+  thread_check_priority (thread_current ());
   /*修改完优先级之后判断一下这个修改的优先级是否比 ready 队列队首的线程的优先级高，如果是，则立即进行调度，让当前线程放弃 CPU 时间片，进入 ready 队列。*/
-  if (new_priority > list_entry(list_head (&ready_list), struct thread, elem)->priority)
-    thread_yield ();
+  /*其实不需要if*/
+  /*if (new_priority > list_entry(list_head (&ready_list), struct thread, elem)->priority)*/
+  thread_yield ();
 }
 
 /* Returns the current thread's priority. */
@@ -610,3 +613,24 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+
+/* 由持有的锁获得抖内，更新priority */
+void
+thread_check_priority (struct thread *t)
+{
+  int max_priority = PRI_MIN;
+  if (!list_empty (&t->locks_holding))
+  {
+    list_sort (&t->locks_holding, lock_cmp_by_priority, NULL);
+    if (list_entry (list_front (&t->locks_holding), struct lock, elem)->priority > max_priority)
+      max_priority = list_entry (list_front (&t->locks_holding), struct lock, elem)->priority;
+  }
+  if (max_priority > t->old_priority)
+    t->priority = max_priority;
+  else
+    t->priority = t->old_priority;
+
+  list_sort (&ready_list, cmp_by_priority, NULL);
+}
