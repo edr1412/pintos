@@ -184,8 +184,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
-  /*设置剩余休眠时间为0*/
-  t->ticks_blocked = 0;
+
 
   /*关闭中断*/
   old_level = intr_disable ();
@@ -232,6 +231,20 @@ thread_block (void)
 
   thread_current ()->status = THREAD_BLOCKED;
   schedule ();
+}
+
+/*每次中断调用，将每个被 block 的线程剩余时间减一，判断如果有线程完成休眠则 thread_unblock ()，将当前进程加入到就绪队列。*/
+void 
+thread_blocked_check (struct thread *t, void *aux UNUSED)
+{
+  if (t->status == THREAD_BLOCKED && t->ticks_blocked > 0)
+  {
+      //t->ticks_blocked--;
+      if (--(t->ticks_blocked) == 0)
+      {
+          thread_unblock(t);
+      }
+  }
 }
 
 /*受list_insert_ordered()调用的比较函数*/
@@ -491,6 +504,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
+  /*设置剩余休眠时间为0*/
+  t->ticks_blocked = 0;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 

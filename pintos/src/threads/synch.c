@@ -118,8 +118,7 @@ sema_up (struct semaphore *sema)
     /*为了每次V操作唤醒队首的线程就是优先级最高的，先对等待列表里面的线程按优先级排序*/
     list_sort (&sema->waiters, cmp_by_priority, NULL);
 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+    thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
   }
   sema->value++;
   /*可能需要抢占*/
@@ -355,8 +354,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+    sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by

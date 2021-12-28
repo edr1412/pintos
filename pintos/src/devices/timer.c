@@ -25,7 +25,6 @@ static int64_t ticks;
 static unsigned loops_per_tick;
 
 static intr_handler_func timer_interrupt;
-void thread_blocked_check (struct thread *t, void *aux);
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
@@ -182,19 +181,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   thread_foreach (thread_blocked_check, NULL);
 }
 
-/*每次中断调用，将每个被 block 的线程剩余时间减一，判断如果有线程完成休眠则 thread_unblock ()，将当前进程加入到就绪队列。*/
-void 
-thread_blocked_check (struct thread *t, void *aux UNUSED)
-{
-  if (t->status == THREAD_BLOCKED && t->ticks_blocked > 0)
-  {
-      //t->ticks_blocked--;
-      if (--(t->ticks_blocked) == 0)
-      {
-          thread_unblock(t);
-      }
-  }
-}
+
 
 
 /* Returns true if LOOPS iterations waits for more than one timer
