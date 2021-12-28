@@ -171,6 +171,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
+  enum intr_level old_level;
 
   ASSERT (function != NULL);
 
@@ -183,6 +184,11 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  /*设置剩余休眠时间为0*/
+  t->ticks_blocked = 0;
+
+  /*关闭中断*/
+  old_level = intr_disable ();
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -198,11 +204,16 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /*设置剩余休眠时间为0*/
-  t->ticks_blocked = 0;
+  /*恢复中断*/
+  intr_set_level (old_level);
 
   /* Add to run queue. */
   thread_unblock (t);
+
+  /*判断新创建的线程的优先级是否比当前运行的线程高*/
+  /* 必须加在 `thread_unblock (t);` 之后.因为必须等到线程创建完毕，可以接受操作系统调度，再进行判断，调度才是有效的 */
+  if (priority > list_entry(list_head (&ready_list), struct thread, elem)->priority)
+    thread_yield ();
 
   return tid;
 }
@@ -349,6 +360,9 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  /*修改完优先级之后判断一下这个修改的优先级是否比 ready 队列队首的线程的优先级低，如果是，则立即进行调度，让当前线程放弃 CPU 时间片，进入 ready 队列。*/
+  if (new_priority < list_entry(list_head (&ready_list), struct thread, elem)->priority)
+    thread_yield ();
 }
 
 /* Returns the current thread's priority. */
