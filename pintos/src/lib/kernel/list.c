@@ -442,6 +442,7 @@ list_sort (struct list *list, list_less_func *less, void *aux)
 /* Inserts ELEM in the proper position in LIST, which must be
    sorted according to LESS given auxiliary data AUX.
    Runs in O(n) average case in the number of elements in LIST. */
+/*利用这个函数插入将使链表有序 每次插入只要O(n)*/
 void
 list_insert_ordered (struct list *list, struct list_elem *elem,
                      list_less_func *less, void *aux)
