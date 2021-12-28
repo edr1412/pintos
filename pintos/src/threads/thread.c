@@ -360,8 +360,8 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
-  /*修改完优先级之后判断一下这个修改的优先级是否比 ready 队列队首的线程的优先级低，如果是，则立即进行调度，让当前线程放弃 CPU 时间片，进入 ready 队列。*/
-  if (new_priority < list_entry(list_head (&ready_list), struct thread, elem)->priority)
+  /*修改完优先级之后判断一下这个修改的优先级是否比 ready 队列队首的线程的优先级高，如果是，则立即进行调度，让当前线程放弃 CPU 时间片，进入 ready 队列。*/
+  if (new_priority > list_entry(list_head (&ready_list), struct thread, elem)->priority)
     thread_yield ();
 }
 
