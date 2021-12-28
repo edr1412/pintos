@@ -198,6 +198,9 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /*设置剩余休眠时间为0*/
+  t->ticks_blocked = 0;
+
   /* Add to run queue. */
   thread_unblock (t);
 
