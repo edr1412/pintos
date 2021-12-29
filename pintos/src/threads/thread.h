@@ -105,7 +105,7 @@ struct thread
     int64_t ticks_blocked;
 
    /*锁相关*/
-    int old_priority; 
+    int priority_old;                   /* 备份不考虑锁的情况下的优先值*/
     struct list locks_holding;          /* 拥有锁的列表。 */
     struct lock *lock_waiting;          /* 需要等待获取的锁。 */
   };

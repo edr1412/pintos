@@ -372,7 +372,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->old_priority = new_priority;
+  thread_current ()->priority_old = new_priority;
   /*再根据锁更新一下优先度，搞不好根本不用变*/
   thread_check_priority (thread_current ());
   /*修改完优先级之后判断一下这个修改的优先级是否比 ready 队列队首的线程的优先级高，如果是，则立即进行调度，让当前线程放弃 CPU 时间片，进入 ready 队列。*/
@@ -507,7 +507,7 @@ init_thread (struct thread *t, const char *name, int priority)
   /*设置剩余休眠时间为0*/
   t->ticks_blocked = 0;
   t->priority = priority;
-  t->old_priority = priority;
+  t->priority_old = priority;
   list_init (&t->locks_holding);
   t->magic = THREAD_MAGIC;
 
@@ -644,10 +644,10 @@ thread_check_priority (struct thread *t)
     if (list_entry (list_front (&t->locks_holding), struct lock, elem)->priority > max_priority)
       max_priority = list_entry (list_front (&t->locks_holding), struct lock, elem)->priority;
   }
-  if (max_priority > t->old_priority)
+  if (max_priority > t->priority_old)
     t->priority = max_priority;
   else
-    t->priority = t->old_priority;
+    t->priority = t->priority_old;
 
   list_sort (&ready_list, cmp_by_priority, NULL);
 }
