@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <fix.h>
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -104,10 +105,13 @@ struct thread
     /*剩余阻塞时间*/
     int64_t ticks_blocked;
 
-   /*锁相关*/
+    /*锁相关*/
     int priority_old;                   /* 备份不考虑锁的情况下的优先值*/
     struct list locks_holding;          /* 拥有锁的列表。 */
     struct lock *lock_waiting;          /* 需要等待获取的锁。 */
+
+    int nice;                           /* Nice表示该线程对于其它线程的友好程度，该值越大，代表该线程的优先级越容易下降而让其它线程运行更多的时间片。 */
+    fix recent_cpu;                     /* 记录当前线程的 CPU 占用情况 */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -130,10 +134,10 @@ void thread_unblock (struct thread *);
 void thread_blocked_check (struct thread *t, void *aux);
 
 
-bool cmp_by_priority (const struct list_elem *, const struct list_elem *, void *aux );
+bool thread_cmp_by_priority (const struct list_elem *, const struct list_elem *, void *aux );
 
 void
-thread_check_priority (struct thread *);
+thread_update_priority (struct thread *);
 
 struct thread *thread_current (void);
 tid_t thread_tid (void);
@@ -152,6 +156,10 @@ void thread_set_priority (int);
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
+void thread_update_recent_cpu_for_current (void);
+void thread_update_recent_cpu_for_all (struct thread *t);
 int thread_get_load_avg (void);
+void thread_update_load_avg (void);
+int thread_count_ready (void);
 
 #endif /* threads/thread.h */

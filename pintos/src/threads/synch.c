@@ -116,7 +116,7 @@ sema_up (struct semaphore *sema)
   if (!list_empty (&sema->waiters)) 
   {
     /*为了每次V操作唤醒队首的线程就是优先级最高的，先对等待列表里面的线程按优先级排序*/
-    list_sort (&sema->waiters, cmp_by_priority, NULL);
+    list_sort (&sema->waiters, thread_cmp_by_priority, NULL);
 
     thread_unblock (list_entry (list_pop_front (&sema->waiters), struct thread, elem));
   }
@@ -212,7 +212,7 @@ lock_acquire (struct lock *lock)
            thread_current ()->priority > iterator_lock->priority)
     {
       iterator_lock->priority = thread_current ()->priority;
-      thread_check_priority (iterator_lock->holder);
+      thread_update_priority (iterator_lock->holder);
       iterator_lock = iterator_lock->holder->lock_waiting;
     }
   }
@@ -227,7 +227,7 @@ lock_acquire (struct lock *lock)
   lock->holder = thread_current ();
 
   /*成功获取锁后要检查优先级，因为有可能锁的优先级高于线程原来的优先级。*/
-  thread_check_priority (thread_current ());
+  thread_update_priority (thread_current ());
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -264,7 +264,7 @@ lock_release (struct lock *lock)
   /*从locks_holding中将其移除*/
   list_remove (&lock->elem);
   /*释放后线程更新优先度*/
-  thread_check_priority (thread_current ());
+  thread_update_priority (thread_current ());
   /*重置锁的优先度*/
   lock->priority = PRI_MIN;
 

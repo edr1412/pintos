@@ -49,6 +49,7 @@ struct kernel_thread_frame
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
 static long long user_ticks;    /* # of timer ticks in user programs. */
+static fix load_avg;            /* 当前系统的平均负载，每 TIMER_FREQ 更新一次。 */
 
 /* Scheduling. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
@@ -112,6 +113,9 @@ thread_start (void)
 
   /* Start preemptive thread scheduling. */
   intr_enable ();
+
+  /* load_avg 初始化为0 */
+  load_avg = I_TO_F(0);
 
   /* Wait for the idle thread to initialize idle_thread. */
   sema_down (&idle_started);
@@ -249,7 +253,7 @@ thread_blocked_check (struct thread *t, void *aux UNUSED)
 
 /*受list_insert_ordered()调用的比较函数*/
 bool
-cmp_by_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+thread_cmp_by_priority (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   return list_entry(a, struct thread, elem)->priority >
          list_entry(b, struct thread, elem)->priority;
@@ -273,7 +277,7 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   //list_push_back (&ready_list, &t->elem);
-  list_insert_ordered (&ready_list, &t->elem,cmp_by_priority,NULL);
+  list_insert_ordered (&ready_list, &t->elem,thread_cmp_by_priority,NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -345,7 +349,7 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) 
     //list_push_back (&ready_list, &cur->elem);
-    list_insert_ordered (&ready_list, &cur->elem,cmp_by_priority,NULL);
+    list_insert_ordered (&ready_list, &cur->elem,thread_cmp_by_priority,NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -374,7 +378,7 @@ thread_set_priority (int new_priority)
 {
   thread_current ()->priority_old = new_priority;
   /*再根据锁更新一下优先度，搞不好根本不用变*/
-  thread_check_priority (thread_current ());
+  thread_update_priority (thread_current ());
   /*修改完优先级之后判断一下这个修改的优先级是否比 ready 队列队首的线程的优先级高，如果是，则立即进行调度，让当前线程放弃 CPU 时间片，进入 ready 队列。*/
   /*其实不需要if*/
   /*if (new_priority > list_entry(list_head (&ready_list), struct thread, elem)->priority)*/
@@ -392,31 +396,63 @@ thread_get_priority (void)
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  thread_current ()->nice = nice;
+  thread_update_priority (thread_current ());
+  thread_yield ();
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current ()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return F_TO_I (F_MULT_I (load_avg, 100));
+}
+
+/* 更新系统的平均负载 */
+void
+thread_update_load_avg (void)
+{
+  /*load_avg = (59/60)*load_avg + (1/60)*ready_threads.*/
+  load_avg = F_DIV_I (F_ADD_I (F_MULT_I (load_avg, 59), thread_count_ready ()), 60);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return F_TO_I (F_MULT_I (thread_current ()->recent_cpu, 100));
+}
+
+/* 对于当前线程，在每一个 timer_tick 中，为RUNNING 的线程 recent_cpu += 1。 */
+void
+thread_update_recent_cpu_for_current (void)
+{
+  if (thread_current () != idle_thread)
+    thread_current ()->recent_cpu = F_ADD_I (thread_current ()->recent_cpu, 1);
+}
+/* 对于所有线程，每 TIMER_FREQ 根据特定公式进行一次 recent_cpu 更新 */
+void
+thread_update_recent_cpu_for_all (struct thread *t)
+{
+  /*recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice.*/
+  if (t != idle_thread)
+    t->recent_cpu = F_ADD_I (F_MULT_F (t->recent_cpu, F_DIV_F (F_MULT_I (load_avg, 2), F_ADD_I (F_MULT_I (load_avg, 2), 1))), t->nice);
+}
+
+/* 得到就绪线程数量 */
+int
+thread_count_ready (void)
+{
+  int ready_threads = list_size (&ready_list);
+  if (thread_current () != idle_thread) ready_threads++;
+  return ready_threads;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -508,12 +544,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->ticks_blocked = 0;
   t->priority = priority;
   t->priority_old = priority;
+  t->nice = 0;
+  t->recent_cpu = I_TO_F(0);
   list_init (&t->locks_holding);
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
   //list_push_back (&all_list, &t->allelem);
-  list_insert_ordered(&all_list, &t->allelem,cmp_by_priority,NULL);
+  list_insert_ordered(&all_list, &t->allelem,thread_cmp_by_priority,NULL);
   intr_set_level (old_level);
 }
 
@@ -635,19 +673,25 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 /* 由持有的锁获得抖内，更新priority */
 void
-thread_check_priority (struct thread *t)
+thread_update_priority (struct thread *t)
 {
-  int max_priority = PRI_MIN;
-  if (!list_empty (&t->locks_holding))
-  {
-    list_sort (&t->locks_holding, lock_cmp_by_priority, NULL);
-    if (list_entry (list_front (&t->locks_holding), struct lock, elem)->priority > max_priority)
-      max_priority = list_entry (list_front (&t->locks_holding), struct lock, elem)->priority;
+  if (t == idle_thread) return;
+  /* mlfqs 不需要考虑优先级捐献的问题*/
+  if (thread_mlfqs){
+    /*priority = PRI_MAX - (recent_cpu / 4) - (nice * 2).*/
+    t->priority = PRI_MAX - F_TO_I (F_ADD_I (F_DIV_I (t->recent_cpu, 4), (2 * t->nice)));
   }
-  if (max_priority > t->priority_old)
-    t->priority = max_priority;
-  else
-    t->priority = t->priority_old;
-
-  list_sort (&ready_list, cmp_by_priority, NULL);
+  else{
+    int max_priority = PRI_MIN;
+    if (!list_empty (&t->locks_holding))
+    {
+      list_sort (&t->locks_holding, lock_cmp_by_priority, NULL);
+      if (list_entry (list_front (&t->locks_holding), struct lock, elem)->priority > max_priority)
+        max_priority = list_entry (list_front (&t->locks_holding), struct lock, elem)->priority;
+    }
+    if (max_priority > t->priority_old)
+      t->priority = max_priority;
+    else
+      t->priority = t->priority_old;
+  }
 }

@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+#include <fix.h>
 #include "devices/pit.h"
 #include "threads/interrupt.h"
 #include "threads/synch.h"
@@ -170,7 +171,7 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 /* 这个函数就是每秒执行TIMER_FREQ次的时钟中断处理函数 */
 static void
@@ -179,6 +180,15 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   thread_foreach (thread_blocked_check, NULL);
+  thread_update_recent_cpu_for_current ();
+  if (ticks % TIMER_FREQ == 0)
+  {
+    thread_update_load_avg ();
+    thread_foreach (thread_update_recent_cpu_for_all, NULL);
+  }
+  /*每四个 timer_ticks 更新每一个线程的优先级*/
+  if (ticks % 4 == 0)
+    thread_foreach (thread_update_priority, NULL);
 }
 
 
