@@ -1,26 +1,9 @@
-                +-----------------+
-                | DESIGN DOCUMENT |
-                |   201906062105  |
-                +-----------------+
 # 前言
 
 ## 实验环境配置
 
 - source code 来自官方[指导](https://www.scs.stanford.edu/21wi-cs140/pintos/pintos_1.html)，`git clone http://cs140.scs.stanford.edu/pintos.git`，在此基础上进行实验。
 - 要运行测试，在Ubuntu 18.04，只需clone我的库，安装qemu并把pintos/src/utils/pintos加到环境变量即可。
-
-- 在wsl1 Ubuntu 18.04 LTS 通过测试
-- 在一台云服务器 Ubuntu 18.04 LTS 通过测试
-
-## 关于判题机可能没有27 pass 的声明
-
-关于判题机的问题同学中也经常出现，而且学习通上有有关讨论。经过研究有时fail的原因如下。
-
-1. `mlfqs-nice-10` 由于运行的不确定性，可能有时会有一个超出偏差值3左右的情况，比如同一个commit，pintos-build-8893超过了，而pintos-build-8896却过了。我在本地测试时几乎没有出现过fail情况，但判题机有时会Thread 0 超一点，原因未知。多试几次一定可以过。下面是测试，随便抽了两次都能过。
-
-   [![TITK8P.png](https://s4.ax1x.com/2022/01/01/TITK8P.png)](https://imgtu.com/i/TITK8P)
-
-2. mlfqs-load-60 mlfqs-load-avg mlfqs-recent-1 因为判题机设定timeout 超过180就会停止，而运行的perl测试脚本运行需要10+180秒，故出现run: TIMEOUT after 181 seconds of wall-clock time是是正常的。参考`pintos/src/tests/threads/mlfqs-load-avg.c `里面注释的输出示例可证明。如果能将超时设定为190秒以上就不会有这样的问题。而本地的Make.tests的设定是480秒，完全余裕，可以通过。下面为本地的27pass证明截图。
 
 [![TI5vMF.png](https://s4.ax1x.com/2022/01/01/TI5vMF.png)](https://imgtu.com/i/TI5vMF)
 
@@ -507,12 +490,3 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
        thread_foreach (thread_update_priority, NULL);
    }
    ```
-
-# 总结
-
-本次课程设计中，虽然看起来只是完成了基础任务，但我拿到作业后是反反复复搜寻文档、搭建环境、代码纠错，最后还碰上判题系统的问题，着实花费了不少时间。
-
-不过，也学到了不少。没有这次课设逼迫我学习git，我可能要暂时无缘这么强大的工具。Linux虽然之前接触很多，这次自己配置环境也学到不少东西，也更深入地理解了make等常用工具。 并且全程都是英文资料，对我来说也是锻炼了英文能力。
-
-光是对线程的程序修修补补已经让我体会到操作系统的伟大。网上虽然能搜到很多pintos的速通，然而逐个理解还是需要耐心去达成，而我也收获到了亲手作出27个All passed 的欣喜。继续加油吧！
-
